@@ -1,0 +1,24 @@
+Pipeline
+Stage 1 — Data Collection
+Download the "Give Me Some Credit" dataset from Kaggle. Understand what each column means before touching it.
+
+Stage 2 — Preprocessing
+Handle missing values, remove or treat outliers, check class distribution.
+
+Stage 3 — Feature Engineering
+Create meaningful derived features from existing columns — ratios, interaction terms, age-based features. This is where thinking happens, not just cleaning.
+
+Stage 4 — Model Training
+Train with imbalance handling. Split correctly — no data leakage.
+
+Stage 5 — Evaluation
+Evaluate on correct metrics for imbalanced problem. Not accuracy.
+
+Stage 6 — SHAP Explainability
+Apply SHAP on the trained model. Generate both global explanations (overall feature importance) and local explanations (why this specific applicant got this prediction).
+
+Stage 7 — Recommendation Logic
+For each flagged applicant, use their SHAP values to generate a specific reason and an actionable suggestion. SHAP already tells you which feature hurt them most — recommendation follows directly from that.
+
+Stage 8 — Dashboard
+Input: applicant details. Output: default probability, risk tier, top reasons, recommendations.
