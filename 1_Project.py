@@ -156,60 +156,34 @@ df = df[~(
     (df['NumberOfTimes90DaysLate'] >= 90)
 )]
 
+
+
 cols = [
-    'DebtRatio',
     'RevolvingUtilizationOfUnsecuredLines',
-    'MonthlyIncome'
+    'DebtRatio',
+    'MonthlyIncome',
+    'age',
+    'NumberOfOpenCreditLinesAndLoans',
+    'NumberRealEstateLoansOrLines',
+    'NumberOfDependents'
 ]
 
-# for col in cols:
-#     print(f"\n========== {col} ==========")
+for col in cols:
+    print(f"\n========== {col} ==========")
     
-#     # Basic stats
-#     print("\n--- Describe ---")
-#     print(df[col].describe())
-    
-#     # Percentiles (important for outliers)
-#     print("\n--- Percentiles ---")
-#     print(df[col].quantile([0.90, 0.95, 0.99, 0.999]))
-    
-#     # Top extreme values
-#     print("\n--- Top 10 Highest Values ---")
-#     print(df[col].sort_values(ascending=False).head(10))
-
-import numpy as np
-
-# -------------------------------
-# 1. Cap DebtRatio (99th percentile)
-# -------------------------------
-debt_cap = df['DebtRatio'].quantile(0.99)
-df['DebtRatio'] = df['DebtRatio'].clip(upper=debt_cap)
-
-
-# -------------------------------
-# 2. Cap Credit Utilization (99th percentile)
-# -------------------------------
-util_cap = df['RevolvingUtilizationOfUnsecuredLines'].quantile(0.99)
-df['RevolvingUtilizationOfUnsecuredLines'] = df['RevolvingUtilizationOfUnsecuredLines'].clip(upper=util_cap)
-
-
-# -------------------------------
-# 3. Handle MonthlyIncome
-# -------------------------------
-
-# Step 3.1: Cap extreme values (99.9 percentile)
-income_cap = df['MonthlyIncome'].quantile(0.999)
-df['MonthlyIncome'] = df['MonthlyIncome'].clip(upper=income_cap)
-
-# Step 3.2: Apply log transform to entire column
-df['MonthlyIncome'] = np.log1p(df['MonthlyIncome'])
-
-
-# -------------------------------
-# OPTIONAL: Verify after transformation
-# -------------------------------
-print("\nAfter Outlier Handling:\n")
-
-for col in ['DebtRatio', 'RevolvingUtilizationOfUnsecuredLines', 'MonthlyIncome']:
-    print(f"\n--- {col} ---")
+    # Basic stats
+    print("\n--- Describe ---")
     print(df[col].describe())
+    
+    # Percentiles (only for continuous features)
+    if df[col].dtype != 'int64':
+        print("\n--- Percentiles ---")
+        print(df[col].quantile([0.90, 0.95, 0.99, 0.999]))
+    
+    # Top extreme values
+    print("\n--- Top 10 Highest Values ---")
+    print(df[col].sort_values(ascending=False).head(10))
+    
+    # Value counts (useful for count/discrete features)
+    print("\n--- Value Counts (Top) ---")
+    print(df[col].value_counts().head(10))

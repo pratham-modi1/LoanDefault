@@ -151,68 +151,78 @@ Columns:
   • Keeping them would mislead the model
 
 ------------------------------------------------------------
+------------------------------------------------------------
 
 4. Detection of Statistical Outliers
 
-- Focused on continuous features:
+- After removing logically incorrect values and encoded anomalies, the next step was to identify statistical outliers in the dataset
+
+- Focus was on continuous features:
   • DebtRatio
   • RevolvingUtilizationOfUnsecuredLines
   • MonthlyIncome
 
-- Used:
-  • df.describe() → to understand spread
-  • df.quantile() → to detect extreme percentiles
-  • Top values inspection → to identify abnormal spikes
+- Methods used:
+  • df.describe() → to understand overall spread and range
+  • df.quantile() → to analyze percentile distribution (90%, 95%, 99%, 99.9%)
+  • Sorting top values → to inspect extreme cases
 
 - Key observation:
-  • Large gap between 99th percentile and max values
-  • Indicates presence of extreme outliers
+  • Large gap between 99th percentile and maximum values
+  • Indicates presence of extreme outliers affecting distribution
 
 ------------------------------------------------------------
 
 5. Handling Extreme but Valid Values
 
-Important distinction:
-  • Invalid values → removed
-  • Valid but extreme values → transformed
+- Important distinction was made:
+  • Invalid values → already removed
+  • Valid but extreme values → handled using transformation techniques
+
+- Objective:
+  • Preserve data
+  • Reduce impact of extreme values on model learning
 
 ------------------------------------------------------------
 
-5.1 DebtRatio
+5.1 RevolvingUtilizationOfUnsecuredLines
 
 - Observation:
-  • Median ≈ 0.35
-  • 99th percentile ≈ 5000
-  • Maximum extremely high (~300k+)
-
-- Issue:
-  • Extreme values distort model learning
+  • Majority values between 0 and 1
+  • 99th percentile ≈ 1.09
+  • Extreme values up to very large numbers (e.g., 50,000)
 
 - Action:
   • Applied capping at 99th percentile
 
+- Implementation:
+  • Used df.quantile(0.99) to get threshold
+  • Used df.clip(upper=value) to cap values
+
 - Reason:
-  • Values are possible but not reliable
-  • Capping reduces impact without deleting rows
+  • Feature has natural upper bound
+  • Extreme values are unrealistic and distort model behavior
 
 ------------------------------------------------------------
 
-5.2 RevolvingUtilizationOfUnsecuredLines
+5.2 DebtRatio
 
 - Observation:
-  • Most values between 0–1
-  • Extreme values up to 50,000
-
-- Issue:
-  • Credit utilization should be within a limited range
-  • Large values are unrealistic or noise
+  • Median ≈ 0.35
+  • 99th percentile ≈ 4900
+  • Maximum values extremely large (above 300,000)
 
 - Action:
-  • Applied capping at 99th percentile (~1.1)
+  • Applied capping at 99th percentile
+
+- Implementation:
+  • Used df.quantile(0.99)
+  • Used df.clip()
 
 - Reason:
-  • Maintains realistic scale
-  • Prevents model distortion
+  • Values are technically possible but extremely skewed
+  • Very large values are likely due to data imbalance or anomalies
+  • Capping prevents these values from dominating the model
 
 ------------------------------------------------------------
 
@@ -220,43 +230,71 @@ Important distinction:
 
 - Observation:
   • Highly right-skewed distribution
-  • Few very large income values
-
-- Issue:
-  • Large differences affect model sensitivity
+  • 99.9th percentile ≈ 75,000
+  • Maximum values extremely high (in lakhs)
 
 - Action:
-  • Capped at 99.9 percentile
+  • Applied capping at 99.9th percentile
   • Applied log transformation to entire column
 
+- Implementation:
+  • df.quantile(0.999) for cap threshold
+  • df.clip() for capping
+  • np.log1p() for transformation
+
 - Reason:
-  • Income is valid but skewed
-  • Log transform compresses scale and stabilizes distribution
+  • Income values are valid but heavily skewed
+  • Log transformation compresses scale and improves distribution
+  • Light capping removes extreme tail influence without losing data
 
 ------------------------------------------------------------
 
-6. Key Concepts Applied
+6. Handling of Remaining Features
 
-- Logical filtering → removed invalid data
-- Pattern recognition → detected encoded anomalies
-- Percentile-based analysis → identified extreme values
+- Age:
+  • Already cleaned (restricted between 18 and 100)
+  • Naturally bounded → no further transformation required
+
+- NumberOfOpenCreditLinesAndLoans:
+  • Discrete count feature
+  • High values are rare but possible → no transformation applied
+
+- NumberRealEstateLoansOrLines:
+  • Discrete feature with low average
+  • Extreme values very rare → no strong evidence to modify
+
+- NumberOfDependents:
+  • Mostly small values (0–4)
+  • Higher values possible in real-world scenarios
+  • No transformation applied to preserve meaning
+
+- Target Variable (SeriousDlqin2yrs):
+  • Not modified to avoid leakage or distortion
+
+------------------------------------------------------------
+
+7. Key Techniques Used
+
+- Logical filtering → removed impossible values
+- Pattern detection → removed encoded anomalies (96, 98)
+- Percentile analysis → identified extreme values
 - Capping (Winsorization) → controlled extreme values
-- Log transformation → reduced skewness
+- Log transformation → handled skewed distributions
 
 ------------------------------------------------------------
 
-7. Outcome
+8. Final Outcome
 
 - Dataset is now:
   • Free from invalid and encoded errors
   • Balanced with controlled extreme values
-  • Better distributed for model training
+  • Less skewed and more model-friendly
 
-- No unnecessary data loss
 - Important patterns preserved
+- No unnecessary data loss
 
 ------------------------------------------------------------
 
 STATUS:
-- Outliers handled using domain knowledge + statistical methods
+- Outlier handling completed using domain knowledge and statistical methods
 - Dataset ready for next step: Feature Scaling
