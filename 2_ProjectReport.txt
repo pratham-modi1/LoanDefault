@@ -1,0 +1,262 @@
+STAGE 0: PROJECT SETUP & DATA UNDERSTANDING
+
+1. Repository Setup
+- Created a GitHub repository for the Loan Default Predictor project
+- Initialized Git in local project folder
+- Added .gitignore file to exclude CSV dataset files
+- Committed initial project files
+- Connected local repo to GitHub and pushed code
+
+2. Dataset Loading
+- Imported dataset (CS-training.csv) using pandas
+- Removed unnecessary index column
+- Reorganized columns into meaningful categories:
+  • Credit Usage
+  • Payment Behavior
+  • Financial Capacity
+  • Personal Profile
+  • Target Variable
+
+3. Data Understanding
+- Interpreted each feature in the dataset
+- Understood meaning of key financial terms:
+  • Credit limit and utilization
+  • Loan vs credit lines
+  • Delinquency (late payments)
+
+4. Target Variable Clarity
+- Identified target: SeriousDlqin2yrs
+- Defined as whether a person had 90+ days payment delay in last 2 years
+- Distinguished from other delay count features
+
+STATUS:
+- Dataset structure understood
+- Features interpreted
+- Project environment and repository successfully set up
+
+
+
+
+STAGE 1: DATA PREPROCESSING (PARTIAL)
+
+1. Duplicate Handling
+- Checked for duplicate rows in the dataset
+- Identified number of duplicates using df.duplicated().sum()
+- Removed duplicates using df.drop_duplicates()
+- Reason: Duplicate data can bias the model and distort learning patterns
+
+2. Missing Value Analysis
+- Checked missing values column-wise using df.isna().sum()
+- Observations:
+  • MonthlyIncome had ~20% missing values
+  • NumberOfDependents had ~2-5% missing values
+  • Other columns had negligible or no missing values
+
+3. Handling Missing Values: MonthlyIncome
+
+- Problem:
+  MonthlyIncome is a continuous variable with a wide range and high variance
+
+- Approach Used:
+  Model-based imputation using RandomForestRegressor
+
+- Steps:
+  • Split dataset into known (non-missing) and unknown (missing) income
+  • Trained Random Forest model on known data
+  • Predicted missing income values using other features
+  • Filled predicted values back into dataset
+
+- Why not Median?
+  • Median is a basic approximation
+  • Does not capture relationships between features
+  • Ignores patterns like income vs credit behavior
+
+- Why Model is Better?
+  • Learns complex relationships from data
+  • Handles non-linear dependencies
+  • Produces more realistic estimates
+  • Improves feature quality, leading to better model performance
+
+4. Handling Missing Values: NumberOfDependents
+
+- Problem:
+  Small integer feature with limited range
+
+- Approach Used:
+  Median imputation
+
+- Reasoning:
+  • Low variability → median is representative
+  • Relationships with other features are weak
+  • Model-based approach may introduce noise (e.g., predicting 1.7 dependents)
+  • Simpler and more stable method preferred
+
+5. Key Insight
+
+- Not all missing values should be treated the same way:
+  • Complex continuous features → model-based imputation
+  • Simple discrete features → statistical imputation (median)
+
+STATUS:
+- Duplicates removed
+- Missing values handled intelligently
+- Dataset cleaned and ready for further preprocessing steps
+
+
+STAGE 1: DATA PREPROCESSING (CONTINUED – OUTLIER HANDLING)
+
+1. Objective
+- After handling duplicates and missing values, the next step was to handle outliers
+- Goal was to:
+  • Remove logically incorrect data
+  • Identify suspicious extreme values
+  • Reduce skewness without losing important information
+  • Prepare dataset for stable model training
+
+------------------------------------------------------------
+
+2. Removal of Logically Incorrect Values
+
+- Applied domain-based filtering to remove impossible values:
+  • age < 18 or age > 100 → removed
+  • Negative values in financial/count features → removed
+  • Counts (like delays, loans, dependents) cannot be negative
+
+- Result:
+  • Around 3,800 rows removed (~2.5% of dataset)
+  • Data integrity improved without major data loss
+
+------------------------------------------------------------
+
+3. Handling Encoded Outliers in Late Payment Features
+
+Columns:
+  • NumberOfTime30-59DaysPastDueNotWorse
+  • NumberOfTime60-89DaysPastDueNotWorse
+  • NumberOfTimes90DaysLate
+
+- Observed values:
+  • Normal range: 0 to ~15–18
+  • Sudden spikes at 96 and 98
+
+- Interpretation:
+  • These values are not realistic counts
+  • Represent encoded errors or placeholder values
+
+- Action:
+  • Removed rows where any of these values ≥ 90
+
+- Reason:
+  • These are invalid data points, not real behavior
+  • Keeping them would mislead the model
+
+------------------------------------------------------------
+
+4. Detection of Statistical Outliers
+
+- Focused on continuous features:
+  • DebtRatio
+  • RevolvingUtilizationOfUnsecuredLines
+  • MonthlyIncome
+
+- Used:
+  • df.describe() → to understand spread
+  • df.quantile() → to detect extreme percentiles
+  • Top values inspection → to identify abnormal spikes
+
+- Key observation:
+  • Large gap between 99th percentile and max values
+  • Indicates presence of extreme outliers
+
+------------------------------------------------------------
+
+5. Handling Extreme but Valid Values
+
+Important distinction:
+  • Invalid values → removed
+  • Valid but extreme values → transformed
+
+------------------------------------------------------------
+
+5.1 DebtRatio
+
+- Observation:
+  • Median ≈ 0.35
+  • 99th percentile ≈ 5000
+  • Maximum extremely high (~300k+)
+
+- Issue:
+  • Extreme values distort model learning
+
+- Action:
+  • Applied capping at 99th percentile
+
+- Reason:
+  • Values are possible but not reliable
+  • Capping reduces impact without deleting rows
+
+------------------------------------------------------------
+
+5.2 RevolvingUtilizationOfUnsecuredLines
+
+- Observation:
+  • Most values between 0–1
+  • Extreme values up to 50,000
+
+- Issue:
+  • Credit utilization should be within a limited range
+  • Large values are unrealistic or noise
+
+- Action:
+  • Applied capping at 99th percentile (~1.1)
+
+- Reason:
+  • Maintains realistic scale
+  • Prevents model distortion
+
+------------------------------------------------------------
+
+5.3 MonthlyIncome
+
+- Observation:
+  • Highly right-skewed distribution
+  • Few very large income values
+
+- Issue:
+  • Large differences affect model sensitivity
+
+- Action:
+  • Capped at 99.9 percentile
+  • Applied log transformation to entire column
+
+- Reason:
+  • Income is valid but skewed
+  • Log transform compresses scale and stabilizes distribution
+
+------------------------------------------------------------
+
+6. Key Concepts Applied
+
+- Logical filtering → removed invalid data
+- Pattern recognition → detected encoded anomalies
+- Percentile-based analysis → identified extreme values
+- Capping (Winsorization) → controlled extreme values
+- Log transformation → reduced skewness
+
+------------------------------------------------------------
+
+7. Outcome
+
+- Dataset is now:
+  • Free from invalid and encoded errors
+  • Balanced with controlled extreme values
+  • Better distributed for model training
+
+- No unnecessary data loss
+- Important patterns preserved
+
+------------------------------------------------------------
+
+STATUS:
+- Outliers handled using domain knowledge + statistical methods
+- Dataset ready for next step: Feature Scaling

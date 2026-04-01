@@ -1,0 +1,78 @@
+Stage 1 — General ML Pipeline Checklist
+Data Understanding
+
+ Know what every column means before touching it
+ Know your target variable and what it actually represents
+ Check class distribution immediately
+
+Preprocessing
+
+ Remove duplicates
+ Handle missing values (method depends on feature, not one-size-fits-all)
+ Identify and treat outliers
+ Check data types are correct
+
+EDA
+
+ Distribution of each feature
+ Correlation with target
+ Feature-to-feature relationships
+ Class-wise distributions (fraud vs legit, default vs not)
+
+Feature Engineering
+
+ Create derived features with business reasoning
+ Encode categoricals if any
+ Scale features after split, not before
+
+Modeling
+
+ Split before any scaling or transformation that learns from data
+ Stratify split for imbalanced targets
+ Handle class imbalance
+ Train baseline first, then improve
+
+Evaluation
+
+ Use metrics appropriate for your problem
+ Evaluate on held-out test set only
+ Check confusion matrix, not just aggregate scores
+
+Explainability
+
+ Global SHAP — what does the model rely on overall
+ Local SHAP — why did this specific prediction happen
+
+Deployment/Dashboard
+
+ Input → prediction → explanation → recommendation flow
+
+
+Stage 2 — Thinking-Based Guide
+
+On Missing Values
+Before choosing a method, ask: why is this value missing? Is it missing randomly, or is missingness itself informative? A person who left MonthlyIncome blank might be unemployed — that pattern matters. Sometimes creating a "was_missing" binary flag before imputation captures this signal better than imputation alone.
+Ask: does this feature have strong relationships with other features? If yes, model-based imputation makes sense. If a feature is nearly independent of everything else, median is just as good and introduces less risk.
+Ask: how much is missing? 2% missing with median imputation is invisible. 20% missing with any imputation method introduces substantial uncertainty — your model is partly learning from fabricated values.
+On Model-Based Imputation — When It Helps vs When It Hurts
+It helps when the feature has genuine predictive relationships with other features, when the missing % is high enough that simple imputation would distort the distribution, and when the imputed values will be used as features in a model that's sensitive to realistic value ranges.
+It introduces risk in three ways. First, if you train the imputer on the full dataset including the test set, you've introduced data leakage — the imputer has seen test data. The correct approach: fit imputer on training data, transform both train and test using training statistics. Second, if your imputation model is complex (deep Random Forest), it may overfit the imputation itself — imputed values become too confident. Third, errors in imputed values compound — if the imputer is wrong, your downstream model learns from wrong data with no way to know.
+
+On Outliers
+The key question is not "is this an outlier" but "is this an error or a real extreme value?" A person with 50 open credit lines might look like an outlier but could be a real high-credit-activity individual. Removing them loses real signal.
+Ask: does this outlier exist in the real world? If yes, treat it carefully — cap it, transform it, but don't delete it. If it's clearly a data entry error (age = 0, income = 999999999), remove or correct it.
+Ask: which model am I using? Tree-based models (Random Forest) are robust to outliers because they split on rank, not magnitude. Linear models and distance-based models (KNN) are severely affected. Your outlier treatment should depend partly on your model choice.
+
+On Feature Relationships and Leakage
+Before creating any derived feature, ask: would this information be available at prediction time in the real world? If you're predicting loan default at application time, you cannot use features that are only known after the loan is given.
+Ask: does this feature contain information about the target that isn't available at prediction time? This is leakage. It inflates validation scores and produces models that fail in production.
+Ask: are two features measuring the same thing in different ways? High correlation between features isn't always a problem for tree models but can distort SHAP values — SHAP splits importance between correlated features in ways that are hard to interpret.
+On Transformations
+Ask: does this transformation make the feature more useful for the model or just look prettier? Log-transforming a skewed feature genuinely helps linear models and distance-based models. For Random Forest, it often makes no difference — the model splits on rank anyway.
+Ask: am I transforming before or after splitting? Any transformation that learns a parameter (mean, std, log base) must be fit on training data only and applied to test data using training parameters. This is the same principle as scaling.
+On Whether a Step Actually Helped
+This is the discipline most beginners skip. After any preprocessing or feature engineering step, validate that it actually improved something — model CV score, distribution shape, or a metric you care about. If adding a feature doesn't change validation performance, it may not be carrying signal.
+The mindset: every step should have a hypothesis ("I believe log-transforming income will help the model because it's severely right-skewed") and a verification ("CV score improved from 0.81 to 0.83 — hypothesis supported"). Without this loop, you're doing preprocessing rituals, not engineering.
+On Evaluation
+Ask: what does a false negative cost vs a false positive in this problem? In loan default, missing a defaulter (false negative) costs the bank money. Flagging a good borrower as risky (false positive) costs a customer relationship. These costs are not equal. Your threshold and metric choices should reflect the real-world cost asymmetry.
+Ask: is my validation score honest? If you tuned any parameter (threshold, feature selection, imputation method) using the test set, your test score is no longer an unbiased estimate of real performance. Reserve the test set for one final evaluation only.
