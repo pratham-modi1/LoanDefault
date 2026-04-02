@@ -1,3 +1,5 @@
+Project Title : Loan Default Prediction with SHAP analysis
+
 STAGE 0: PROJECT SETUP & DATA UNDERSTANDING
 
 1. Repository Setup
@@ -45,6 +47,7 @@ STAGE 1: DATA PREPROCESSING (PARTIAL)
 - Removed duplicates using df.drop_duplicates()
 - Reason: Duplicate data can bias the model and distort learning patterns
 
+
 2. Missing Value Analysis
 - Checked missing values column-wise using df.isna().sum()
 - Observations:
@@ -61,10 +64,12 @@ STAGE 1: DATA PREPROCESSING (PARTIAL)
   Model-based imputation using RandomForestRegressor
 
 - Steps:
-  • Split dataset into known (non-missing) and unknown (missing) income
-  • Trained Random Forest model on known data
-  • Predicted missing income values using other features
-  • Filled predicted values back into dataset
+  
+Added a binary indicator feature MonthlyIncome_was_missing to preserve missingness information before imputation.
+Split the dataset into two subsets: known (non-missing income) and unknown (missing income).
+Trained a Random Forest model on the known subset using other features as predictors.
+Predicted missing income values for the unknown subset using the trained model.
+Filled the predicted values back into the dataset to replace missing entries in MonthlyIncome.
 
 - Why not Median?
   • Median is a basic approximation
@@ -297,4 +302,9 @@ Columns:
 
 STATUS:
 - Outlier handling completed using domain knowledge and statistical methods
-- Dataset ready for next step: Feature Scaling
+- Dataset ready for next step
+
+
+
+
+

@@ -43,4 +43,5 @@ This represents how many people depend on the borrower financially. More depende
 TARGET VARIABLE
 
 SeriousDlqin2yrs:
-This indicates whether the person has experienced serious delinquency (90+ days past due). A value of 1 means default, and 0 means no default.
+This indicates whether the person has experienced serious delinquency (90+ days past due). A value of 1 means default, and 0 means no default
+.
