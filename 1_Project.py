@@ -207,11 +207,17 @@ df['MonthlyIncome'] = np.log1p(df['MonthlyIncome'])
 
 
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+# =====================================================================
+# STAGE 2: EXPLORATORY DATA ANALYSIS (EDA)
+# =====================================================================
 
-# # 1. Calculate raw counts and percentages
+# # ---------------------------------------------------------------------
+# # 1. Target Variable Analysis & Class Imbalance
+# # ---------------------------------------------------------------------
 # target_counts = df['SeriousDlqin2yrs'].value_counts()
 # target_percentages = df['SeriousDlqin2yrs'].value_counts(normalize=True) * 100
 
@@ -220,16 +226,13 @@ import seaborn as sns
 # print(f"Defaulters (1): {target_counts.get(1, 0)} ({target_percentages.get(1, 0.0):.2f}%)")
 # print("-" * 54)
 
-# # 2. Visualize the distribution
 # plt.figure(figsize=(8, 6))
 # ax = sns.countplot(data=df, x='SeriousDlqin2yrs', palette=['#2ecc71', '#e74c3c'])
-
-# # Add titles and labels
 # plt.title('Distribution of Loan Defaults (Class Imbalance)', fontsize=14, fontweight='bold', pad=15)
 # plt.xlabel('Serious Default in 2 Years (0 = No, 1 = Yes)', fontsize=12)
 # plt.ylabel('Number of Borrowers', fontsize=12)
 
-# # Add percentage labels directly on top of the bars for the report
+# # Add percentage labels directly on top of the bars
 # total = len(df)
 # for p in ax.patches:
 #     height = p.get_height()
@@ -240,30 +243,43 @@ import seaborn as sns
 #                 fontsize=12, fontweight='bold', xytext=(0, 5), 
 #                 textcoords='offset points')
 
-# # Clean up the chart aesthetics
 # sns.despine()
 # plt.tight_layout()
 # plt.show()
 
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# # NOTE: Continue using your cleaned 'df'
-
-# # 1. Correlation Analysis (Spearman)
-# # We use Spearman correlation because it handles non-linear relationships and skewed data better than Pearson
+# # ---------------------------------------------------------------------
+# # 2. Correlation Matrix (Target Analysis)
+# # ---------------------------------------------------------------------
 # plt.figure(figsize=(10, 8))
 # corr_matrix = df.corr(method='spearman')
 
-# # Plotting only the correlation with our target variable for clarity
+# # Plotting only the correlation with our target variable to filter noise
 # target_corr = corr_matrix[['SeriousDlqin2yrs']].sort_values(by='SeriousDlqin2yrs', ascending=False)
 # sns.heatmap(target_corr, annot=True, cmap='coolwarm', vmin=-1, vmax=1, fmt=".2f")
-# plt.title('Feature Correlation with Loan Default', fontsize=14, fontweight='bold', pad=15)
+# plt.title('Feature Correlation with Loan Default (Target Analysis)', fontsize=14, fontweight='bold', pad=15)
 # plt.tight_layout()
 # plt.show()
 
-# # 2. Deep Dive: Late Payment Columns vs Target
+# # ---------------------------------------------------------------------
+# # 3. Multicollinearity Assessment (Feature-to-Feature Correlation)
+# # ---------------------------------------------------------------------
+# plt.figure(figsize=(12, 10))
+
+# # Calculate full correlation matrix EXCLUDING the target
+# features_only = df.drop(columns=['SeriousDlqin2yrs'])
+# full_corr = features_only.corr(method='spearman')
+
+# # Create a mask for the upper triangle so it's not visually overwhelming
+# mask = np.triu(np.ones_like(full_corr, dtype=bool))
+
+# sns.heatmap(full_corr, mask=mask, annot=True, cmap='coolwarm', vmin=-1, vmax=1, fmt=".2f", linewidths=0.5)
+# plt.title('Feature-to-Feature Correlation (Multicollinearity Check)', fontsize=14, fontweight='bold', pad=15)
+# plt.tight_layout()
+# plt.show()
+
+# # ---------------------------------------------------------------------
+# # 4. Bivariate Analysis (Deep Dive: Late Payments vs Target)
+# # ---------------------------------------------------------------------
 # late_payment_cols = [
 #     'NumberOfTime30-59DaysPastDueNotWorse',
 #     'NumberOfTime60-89DaysPastDueNotWorse',
@@ -271,12 +287,10 @@ import seaborn as sns
 # ]
 
 # print("\n--- Average Number of Late Payments by Target Class ---")
-# # Group by default status and calculate the mean for the late payment columns
 # grouped_means = df.groupby('SeriousDlqin2yrs')[late_payment_cols].mean().round(3)
 # print(grouped_means)
 # print("-" * 60)
 
-# # 3. Visualizing the Impact of Late Payments
 # fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 # for i, col in enumerate(late_payment_cols):
 #     sns.barplot(data=df, x='SeriousDlqin2yrs', y=col, ax=axes[i], palette=['#2ecc71', '#e74c3c'], errorbar=None)
@@ -289,90 +303,88 @@ import seaborn as sns
 # plt.tight_layout()
 # plt.show()
 
-# import pandas as pd
+# # ---------------------------------------------------------------------
+# # 5. Univariate Analysis / Distribution Overlap (KDE Plots)
+# # ---------------------------------------------------------------------
+# continuous_cols = ['age', 'DebtRatio', 'MonthlyIncome']
+
+# fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+# for i, col in enumerate(continuous_cols):
+#     # KDE plot normalizes the curves so we can compare shapes despite the 93/6 class imbalance
+#     sns.kdeplot(data=df, x=col, hue='SeriousDlqin2yrs', fill=True, common_norm=False, 
+#                 palette=['#2ecc71', '#e74c3c'], ax=axes[i], alpha=0.5)
+    
+#     axes[i].set_title(f'Distribution of {col}', fontsize=12, fontweight='bold')
+#     axes[i].set_xlabel(col, fontsize=10)
+#     axes[i].set_ylabel('Density', fontsize=10)
+
+# plt.suptitle('Continuous Features vs. Loan Default (Distribution Overlap)', fontsize=16, fontweight='bold', y=1.05)
+# sns.despine()
+# plt.tight_layout()
+# plt.show()
+
+# =====================================================================
+# END OF EDA STAGE
+# =====================================================================
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+
+# 1. Split the data into Train and Test
+X = df.drop(columns=['SeriousDlqin2yrs'])
+y = df['SeriousDlqin2yrs']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+# 2. Initialize the Scaler
+scaler = StandardScaler()
+
+# 3. FIT and TRANSFORM the training data (Learn the rules & apply them)
+X_train_scaled = scaler.fit_transform(X_train)
+
+# 4. ONLY TRANSFORM the test data (Apply the learned rules, DO NOT learn new ones)
+X_test_scaled = scaler.transform(X_test)
+
+# 5. Convert back to DataFrames (To keep column names for SHAP analysis later)
+X_train_scaled = pd.DataFrame(X_train_scaled, columns=X.columns, index=X_train.index)
+X_test_scaled = pd.DataFrame(X_test_scaled, columns=X.columns, index=X_test.index)
+
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# =====================================================================
+# EDA AUDIT FIXES: Missing Features Validation
+# NOTE: Run this on your 'df' BEFORE the train/test split code
+# =====================================================================
+
 # import matplotlib.pyplot as plt
 # import seaborn as sns
 
-# # NOTE: Continue using your cleaned 'df'
+# # 1. Calculate the exact averages for Good vs. Bad borrowers
+# utilization_means = df.groupby('SeriousDlqin2yrs')['RevolvingUtilizationOfUnsecuredLines'].mean().round(3)
+# print("--- Average Credit Card Utilization ---")
+# print(f"Safe Borrowers (0): {utilization_means[0] * 100}% of their limit")
+# print(f"Defaulters (1): {utilization_means[1] * 100}% of their limit")
 
-# # 1. Correlation Analysis (Spearman)
-# # We use Spearman correlation because it handles non-linear relationships and skewed data better than Pearson
-# plt.figure(figsize=(10, 8))
-# corr_matrix = df.corr(method='spearman')
-
-# # Plotting only the correlation with our target variable for clarity
-# target_corr = corr_matrix[['SeriousDlqin2yrs']].sort_values(by='SeriousDlqin2yrs', ascending=False)
-# sns.heatmap(target_corr, annot=True, cmap='coolwarm', vmin=-1, vmax=1, fmt=".2f")
-# plt.title('Feature Correlation with Loan Default', fontsize=14, fontweight='bold', pad=15)
-# plt.tight_layout()
-# plt.show()
-
-# # 2. Deep Dive: Late Payment Columns vs Target
-# late_payment_cols = [
-#     'NumberOfTime30-59DaysPastDueNotWorse',
-#     'NumberOfTime60-89DaysPastDueNotWorse',
-#     'NumberOfTimes90DaysLate'
-# ]
-
-# print("\n--- Average Number of Late Payments by Target Class ---")
-# # Group by default status and calculate the mean for the late payment columns
-# grouped_means = df.groupby('SeriousDlqin2yrs')[late_payment_cols].mean().round(3)
-# print(grouped_means)
-# print("-" * 60)
-
-# # 3. Visualizing the Impact of Late Payments
-# fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-# for i, col in enumerate(late_payment_cols):
-#     sns.barplot(data=df, x='SeriousDlqin2yrs', y=col, ax=axes[i], palette=['#2ecc71', '#e74c3c'], errorbar=None)
-#     axes[i].set_title(f'Avg {col}', fontsize=10)
-#     axes[i].set_xlabel('Default (0=No, 1=Yes)', fontsize=10)
-#     axes[i].set_ylabel('Average Count', fontsize=10)
-
-# plt.suptitle('Impact of Late Payment History on Loan Default', fontsize=16, fontweight='bold', y=1.05)
+# # 2. Draw the Density Plot to prove visual separation to the auditor
+# plt.figure(figsize=(8, 5))
+# sns.kdeplot(data=df, x='RevolvingUtilizationOfUnsecuredLines', hue='SeriousDlqin2yrs', 
+#             fill=True, common_norm=False, palette=['#2ecc71', '#e74c3c'], clip=(0, 2))
+# plt.title('Credit Utilization vs Loan Default', fontsize=14, fontweight='bold')
+# plt.xlabel('Credit Utilization (Capped at 200% for visibility)', fontsize=12)
+# plt.ylabel('Density', fontsize=12)
 # sns.despine()
-# plt.tight_layout()
 # plt.show()
 
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import numpy as np
+# Check if the default rate actually changes based on the missing income flag
+missing_income_rates = df.groupby('MonthlyIncome_was_missing')['SeriousDlqin2yrs'].agg(['mean', 'count'])
+missing_income_rates['mean'] = (missing_income_rates['mean'] * 100).round(2)
+missing_income_rates.columns = ['Default_Rate_Percentage', 'Total_Borrowers']
 
-# NOTE: Continue using your cleaned 'df'
+print("--- Missing Income Validation ---")
+print(missing_income_rates)
 
-# ------------------------------------------------------------
-# 1. Multicollinearity Check (Feature-to-Feature Correlation)
-# ------------------------------------------------------------
-plt.figure(figsize=(12, 10))
 
-# Calculate full correlation matrix (excluding the target)
-features_only = df.drop(columns=['SeriousDlqin2yrs'])
-full_corr = features_only.corr(method='spearman')
-
-# Create a mask for the upper triangle so it's not visually overwhelming
-mask = np.triu(np.ones_like(full_corr, dtype=bool))
-
-sns.heatmap(full_corr, mask=mask, annot=True, cmap='coolwarm', vmin=-1, vmax=1, fmt=".2f", linewidths=0.5)
-plt.title('Feature-to-Feature Correlation (Multicollinearity)', fontsize=14, fontweight='bold', pad=15)
-plt.tight_layout()
-plt.show()
-
-# ------------------------------------------------------------
-# 2. Continuous Features Distribution Overlap (KDE Plots)
-# ------------------------------------------------------------
-continuous_cols = ['age', 'DebtRatio', 'MonthlyIncome']
-
-fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-for i, col in enumerate(continuous_cols):
-    # KDE plot normalizes the curves so we can compare the shapes despite the massive class imbalance
-    sns.kdeplot(data=df, x=col, hue='SeriousDlqin2yrs', fill=True, common_norm=False, 
-                palette=['#2ecc71', '#e74c3c'], ax=axes[i], alpha=0.5)
-    
-    axes[i].set_title(f'Distribution of {col}', fontsize=12, fontweight='bold')
-    axes[i].set_xlabel(col, fontsize=10)
-    axes[i].set_ylabel('Density', fontsize=10)
-
-plt.suptitle('Continuous Features vs. Loan Default (Distribution Overlap)', fontsize=16, fontweight='bold', y=1.05)
-sns.despine()
-plt.tight_layout()
-plt.show()

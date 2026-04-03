@@ -45,7 +45,7 @@ Explainability
 
 Deployment/Dashboard
 
- Input → prediction → explanation → recommendation flow
+Input → prediction → explanation → recommendation flow
 
 
 Stage 2 — Thinking-Based Guide
