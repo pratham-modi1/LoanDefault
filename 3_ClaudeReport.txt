@@ -1,0 +1,138 @@
+LOAN DEFAULT PREDICTION WITH SHAP ANALYSIS
+Project Report — Stages 0 through 5
+
+STAGE 0 — PROJECT SETUP & DATA UNDERSTANDING
+Repository Setup
+A GitHub repository was created for the Loan Default Predictor project. Git was initialized locally, a .gitignore file was configured to exclude the raw CSV dataset, and the repository was connected to GitHub. Only code and documentation are tracked in version control — raw data files are excluded by design, as they are large, potentially sensitive, and do not belong in source control.
+Dataset Loading & Structure
+The dataset (CS-training.csv) contains approximately 150,000 borrower records sourced from the Kaggle "Give Me Some Credit" competition. An auto-generated index column was dropped on load. The 11 feature columns were reorganized into four logical categories that reflect real-world financial meaning:
+Credit Usage — RevolvingUtilizationOfUnsecuredLines
+Payment Behavior — Late payment counts at 30-59, 60-89, and 90+ day thresholds
+Financial Capacity — DebtRatio, MonthlyIncome
+Personal Profile — Age, open credit lines, real estate loans, number of dependents
+Target — SeriousDlqin2yrs (1 = serious default within 2 years, 0 = no default)
+Feature Interpretation
+RevolvingUtilizationOfUnsecuredLines — Ratio of current revolving balances to credit limits. Values above 1.0 indicate over-limit usage. A core stress signal.
+NumberOfTime30-59DaysPastDueNotWorse — Count of incidents 30-59 days late, resolved at that severity. An early warning indicator.
+NumberOfTime60-89DaysPastDueNotWorse — Count of 60-89 day late incidents. Represents escalated distress.
+NumberOfTimes90DaysLate — Count of 90+ day late incidents. This is the critical delinquency threshold in consumer lending. Most lenders charge off and report to credit bureaus at 90 days. Expected to be the strongest predictor.
+DebtRatio — Monthly debt payments divided by gross monthly income. Values above 0.43 are generally considered problematic.
+MonthlyIncome — Gross monthly income. Financial capacity indicator, but income alone does not determine default risk.
+age — Proxy for financial maturity, credit history length, and income stability.
+NumberOfOpenCreditLinesAndLoans — Total count of open credit accounts. Indicates credit footprint, not risk by itself.
+NumberRealEstateLoansOrLines — Count of mortgage and home equity accounts. Mortgage holders tend to be more creditworthy on average.
+NumberOfDependents — Financial dependents. Higher counts increase household obligations.
+SeriousDlqin2yrs — The target variable. Binary: 1 if the borrower had a 90+ day delinquency within the next two years. This is forward-looking and distinct from NumberOfTimes90DaysLate, which counts historical incidents.
+
+STAGE 1 — DATA PREPROCESSING
+1.1 Duplicate Removal
+Duplicate rows were identified using df.duplicated() and removed with df.drop_duplicates(). Duplicates inflate model confidence on specific patterns, distort the learning process, and cause the model to overweight whichever profiles happen to appear multiple times. Only exact duplicates across all columns were removed.
+1.2 Missing Value Analysis
+Missing values were assessed column-by-column. Two columns had meaningful missingness:
+
+MonthlyIncome — approximately 20% missing. Required sophisticated imputation.
+NumberOfDependents — approximately 2-5% missing. Simple imputation was appropriate.
+
+All other columns had negligible or zero missing values.
+Core principle: The imputation strategy must match the nature of the feature. Applying the same method to every missing column is a beginner mistake.
+1.3 MonthlyIncome — RF-Based Imputation
+Before imputing, a binary indicator MonthlyIncome_was_missing (1 = income was absent, 0 = income was reported) was created. This preserves the information that a value was absent, which may itself carry predictive signal. The indicator must be created before overwriting the missing values — otherwise the information is lost permanently.
+The dataset was split into rows where income was known (training set) and rows where it was missing (prediction target). A RandomForestRegressor was trained on the known-income subset using eight other features: credit utilization, age, all three late payment counts, debt ratio, open credit lines, and real estate loans. The trained model predicted income for missing rows, which were then filled back in.
+Why not median? Median assigns the same average value to every missing borrower regardless of their other characteristics. A 25-year-old with 90% credit utilization and multiple late payments does not have the same expected income as a 55-year-old with low utilization and clean payment history. Median erases this distinction. Random Forest preserves it by learning from the relationships between income and all other features.
+1.4 NumberOfDependents — Median Imputation
+Median imputation was used here deliberately. This feature is a small integer with very limited range — most borrowers have 0 to 4 dependents. Its relationship with other features is weak. A model-based approach would predict non-integer values like 1.7 dependents, which are meaningless. Median imputation is stable, interpretable, and appropriate for a low-variance discrete feature.
+1.5 Outlier Handling — Three-Phase Approach
+Outlier handling followed a strict sequence: remove the impossible, remove the encoded, treat the extreme.
+Phase 1 — Logically impossible values. Domain knowledge provides unambiguous filters. Age below 18 or above 100 does not exist in a lending context. Negative counts of late payments or credit lines are impossible. Negative financial ratios are impossible. These rows were removed outright. Approximately 3,800 rows (~2.5% of the dataset) were eliminated. This is an acceptable tradeoff — removing data that would actively mislead the model.
+Phase 2 — Encoded sentinel values. The three late payment columns showed normal distributions with values ranging 0 to 15 or so, but with sudden isolated spikes at values 96 and 98. These are not real counts. They are almost certainly placeholder values used by the source data system to represent unknown or not-applicable entries. Rows where any late payment column had a value of 90 or above were removed, as no genuine borrower has been late 90 or 98 times.
+Phase 3 — Extreme but valid values. After removing impossible and encoded values, the remaining continuous features were examined using percentile analysis. A large gap between the 99th percentile and the maximum in all three features indicated a small number of extreme values capable of dominating model training.
+RevolvingUtilizationOfUnsecuredLines — 99th percentile ≈ 1.09, maximum in the tens of thousands. Capped at the 99th percentile. Values above 1.09 are not real utilization ratios.
+DebtRatio — Median ≈ 0.35, maximum above 300,000. Capped at the 99th percentile. Debt ratios in the thousands represent data quality issues, not real borrower situations.
+MonthlyIncome — Highly right-skewed. Capped at the 99.9th percentile (~$75,000/month) to preserve high earners while removing implausible extremes. Log transformation (np.log1p()) applied to the entire column to compress the right tail and normalize the distribution. Log1p is used instead of log to handle zero-income entries without undefined results.
+The key distinction: invalid values are removed (they are wrong). Extreme but valid values are capped and transformed (they are real, but their influence must be controlled). Treating these the same way would either delete real data or leave corrupted data in the dataset.
+
+STAGE 2 — EXPLORATORY DATA ANALYSIS
+2.1 Why EDA Is Non-Negotiable
+EDA is not a box-ticking exercise. It is the phase where an engineer builds a mathematically grounded understanding of the dataset before any algorithm sees it. Without this understanding, a model will learn whatever patterns exist in the data — including flaws, biases, and noise — with complete confidence. EDA serves three concrete purposes in this project:
+It prevents false victories by identifying the accuracy trap before it misleads the project. It filters noise by establishing mathematically which features carry real signal. It establishes a ground truth that serves as an audit mechanism for the final SHAP analysis — if the model's reasoning contradicts the EDA findings, the model has a problem.
+2.2 Target Variable Analysis & Class Imbalance
+The class distribution is approximately 93.37% non-defaulters and 6.63% defaulters — a 14:1 imbalance.
+This creates an immediate problem. A model that predicts "No Default" for every single borrower achieves 93.37% accuracy while catching zero actual defaulters. This is the accuracy trap. High accuracy in an imbalanced classification problem is meaningless without examining what the model actually predicts.
+Formal metric decision: Standard accuracy is rejected as an evaluation metric for this project. The primary metric is PR-AUC (Precision-Recall Area Under the Curve), which focuses entirely on the minority class and is the correct standard for imbalanced classification. The secondary metric is ROC-AUC. The evaluation hierarchy is: Recall first (catching defaulters is the highest-cost miss), Precision second (minimizing false positives), F1 third (harmonic balance).
+Class-balancing techniques (algorithmic class weighting and SMOTE) will be required during modeling so the model does not learn to ignore the 6.63% minority.
+2.3 Correlation Matrix — The Strategic Filter
+Spearman rank correlation was chosen over Pearson because the features are heavily skewed and the relationships with the target may be non-linear. Spearman measures monotonic relationships and is robust to both of these conditions.
+The correlation matrix was computed first, before any visualization, following the discipline of "calculate everything, plot only what matters." Features with near-zero correlation do not warrant visualization — they would produce identical overlapping curves that confirm what the math already showed.
+Results:
+
+NumberOfTimes90DaysLate — 0.34 (strongest signal)
+NumberOfTime30-59DaysPastDueNotWorse — 0.30
+NumberOfTime60-89DaysPastDueNotWorse — 0.28
+RevolvingUtilizationOfUnsecuredLines — 0.24
+age — -0.12 (negative: older borrowers default less)
+MonthlyIncome, DebtRatio, NumberOfDependents, NumberOfOpenCreditLinesAndLoans — all below 0.06, near-zero
+
+The SHAP answer key: The correlation analysis produces a verifiable prediction for Stage 6. When SHAP is run, the global feature importance ranking should place NumberOfTimes90DaysLate and RevolvingUtilizationOfUnsecuredLines at the top. If the model's SHAP values instead rank MonthlyIncome or NumberOfDependents as the primary drivers, the model has learned noise rather than signal, and the pipeline requires an audit.
+Pre-planned overfitting defense: The near-zero correlation features are already identified. If the final model overfits, the first intervention is feature reduction: drop DebtRatio, MonthlyIncome, NumberOfDependents, and NumberOfOpenCreditLinesAndLoans, and retrain. This response is pre-planned and does not require additional exploratory work.
+2.4 Multicollinearity Assessment
+Feature-to-feature correlation was examined specifically for the three late payment columns, which are the most likely candidates for redundancy. The intuitive assumption is that a borrower who is 90 days late must first have been 30 and 60 days late, creating a near-perfect staircase correlation.
+The analysis showed overlap of only 25-30% between the three columns. This is meaningful but not redundant. Each column captures approximately 70-75% unique information that the others do not. The three features represent distinct stages of financial distress — a borrower who is frequently 30 days late but always recovers is a different risk profile from one who goes directly to 90+ days. The features can coexist safely without creating the echo-chamber problem. SHAP values will not be distorted by their presence together in the model.
+2.5 Bivariate and Univariate Analysis
+Bar charts were used for the discrete late payment columns to compare average counts by default class. KDE density plots were used for continuous features (age, income, debt ratio) with common_norm=False to normalize each class independently — without this, the far smaller defaulter class would produce a nearly invisible curve.
+Late payment findings: While 30-day delays are common for both classes, crossing the 90-day threshold is the definitive point of no return. Defaulters have dramatically higher average counts of 90+ day events. This confirms the correlation analysis and establishes a key hypothesis: the model's decision nodes should split heavily on this feature.
+Age findings: Defaulters peak in the 30-40 age range. Non-defaulters peak in the 50-60 age range. Clear demographic separation exists. The model should use age as a meaningful secondary splitting criterion.
+Income and debt ratio findings: The KDE curves for both features show near-perfect overlap between classes. Visually confirming the near-zero correlation numbers — high income alone and high debt ratio alone do not determine default risk. These features are retained but will not be primary model drivers.
+2.6 Credit Utilization Deep Dive
+RevolvingUtilizationOfUnsecuredLines received targeted analysis as the fourth-strongest signal. Statistical grouping by target class revealed a decisive behavioral gap: non-defaulters use an average of 29.3% of their revolving credit. Defaulters use an average of 68.5% — more than twice as much. Density plots confirmed this visually, with defaulters clustering near 100% utilization. This is a primary splitting feature and a key variable to watch in the SHAP output.
+2.7 MonthlyIncome_was_missing Validation
+The MonthlyIncome_was_missing indicator created in Stage 1 was formally validated. If borrowers with missing income default at the same rate as those who reported income, the indicator is noise and should be dropped.
+Validation result: borrowers with reported income default at 6.89%. Borrowers with missing income default at 5.50%. A 1.4 percentage point divergence exists between the two groups. The indicator carries real predictive signal and is retained for modeling.
+
+STAGE 2.5 — DATA SPLITTING, FEATURE ENGINEERING & SCALING
+Train/Test Split
+The dataset was split into 80% training and 20% test using stratified sampling (stratify=y). Stratification ensures both subsets maintain the exact 93.4%/6.6% class ratio. Without stratification, a random split could produce a test set with a different class distribution by chance, producing misleading evaluation metrics.
+The separate test.csv file acts as the final exam — it is used only for final evaluation, never for tuning decisions. Any model adjustment based on test set performance is data leakage.
+Feature Engineering — Weighted Delinquency Score
+weighted_late = (30-59 day count × 1) + (60-89 day count × 2) + (90+ day count × 3)
+This feature encodes the financial severity of delinquency events rather than treating all late payments equally. A single 90-day event is assigned three times the weight of a 30-day event, reflecting the real-world severity difference. This is the first engineered feature added before the baseline — it is intentionally minimal. Aggressive feature engineering before establishing a baseline makes it impossible to isolate whether gains came from engineering or from other pipeline choices.
+Feature Scaling
+StandardScaler was fitted exclusively on the training data and then applied to transform both training and test sets. Fitting the scaler on training data only prevents test set information from influencing the normalization parameters. This is a fundamental data leakage prevention requirement.
+Tree-based models (Random Forest, XGBoost) are mathematically immune to feature scale. Scaling is applied regardless, because a robust pipeline must remain compatible with distance-based algorithms like Logistic Regression. Without scaling, MonthlyIncome (values in thousands) would numerically dominate DebtRatio (values near 0.35) in any distance computation, effectively erasing the smaller-scale feature.
+Column names are preserved after scaling by converting back to DataFrames. This is required for SHAP analysis — without column names, SHAP plots display numeric indices instead of feature names and become unreadable.
+
+STAGE 3 — MODEL DEVELOPMENT
+Standardized Evaluation Function
+A single evaluate_model() function was defined and applied identically to every model. It computes Precision, Recall, F1, PR-AUC, and ROC-AUC at a specified threshold. Using the same function and same test set across all models ensures comparisons are genuine. Evaluating different models at different thresholds would make performance comparisons meaningless.
+Step 1 — Dummy Classifier Baseline
+Results at default threshold (0.5):
+Precision: 0.0622 | Recall: 0.0623 | F1: 0.0623 | PR-AUC: 0.0659 | ROC-AUC: 0.4979
+The PR-AUC of 0.066 is approximately equal to the proportion of the positive class, confirming this model is guessing randomly. ROC-AUC of ~0.5 confirms no separability. This establishes the performance floor. Every subsequent model's PR-AUC is measured as an improvement over 0.066.
+Step 2 — Logistic Regression
+class_weight='balanced' was used so the loss function penalizes misclassifying the minority class proportionally to its underrepresentation.
+Results at default threshold (0.5):
+Precision: 0.2123 | Recall: 0.7310 | F1: 0.3290 | PR-AUC: 0.3638 | ROC-AUC: 0.8472
+PR-AUC improved from 0.066 to 0.364 — a 5.5× improvement over the dummy baseline. This is the most important single number in the evaluation: it proves that the dataset contains strong, learnable predictive signal. The model catches 73% of actual defaulters (strong recall) but generates significant false positives (precision of only 21%). This recall-heavy behavior is expected with class_weight='balanced' at a 0.5 threshold.
+Step 3 — Random Forest
+Results at default threshold (0.5):
+Precision: 0.2201 | Recall: 0.7285 | F1: 0.3381 | PR-AUC: 0.3640 | ROC-AUC: 0.8527
+Random Forest provides almost no improvement over Logistic Regression. PR-AUC increased from 0.3638 to 0.3640 — two ten-thousandths of a point. This is a critical finding: it means the predictive signal in this dataset is largely captured by linear relationships. The non-linear complexity of Random Forest is not providing meaningful additional value at this stage.
+Step 4 — XGBoost
+scale_pos_weight ≈ 14 (negative-to-positive class ratio) was used to handle class imbalance natively within the boosting process.
+Results at default threshold (0.5):
+Precision: 0.2248 | Recall: 0.7356 | F1: 0.3444 | PR-AUC: 0.3638 | ROC-AUC: 0.8522
+XGBoost achieves the best Precision, Recall, and F1 among the three models, but PR-AUC is essentially identical across all three at ~0.364. The PR-AUC plateau confirms that model complexity is no longer the bottleneck. All three models rank borrowers by default risk with nearly equal effectiveness. The problem is not learning — it is the decision boundary.
+ModelPrecisionRecallF1PR-AUCROC-AUCDummy0.0620.0620.0620.0660.498Logistic Regression0.2120.7310.3290.3640.847Random Forest0.2200.7290.3380.3640.853XGBoost0.2250.7360.3440.3640.852
+
+STAGE 4 — STRATEGIC DECISION: SMOTE VS THRESHOLD OPTIMIZATION
+Two options were evaluated as the next step after the PR-AUC plateau.
+Option A — SMOTE: Generates synthetic minority-class samples to rebalance the dataset. SMOTE is appropriate when the model is failing to learn minority patterns — specifically when recall is low, indicating the model is not identifying defaulters. Current recall is already ~73%. The model is learning the minority class effectively. Applying SMOTE at this stage risks introducing synthetic noise, increasing overfitting, and making the model overaggressive in a way that hurts precision without improving the underlying ranking ability (PR-AUC).
+Option B — Threshold Optimization: Adjusts the probability cutoff used to convert model scores into class predictions. The default threshold of 0.5 is not appropriate for a 6.6% base rate problem. The model assigns low probabilities to most borrowers, and 0.5 is far into the tail of the positive-class probability distribution. Lowering the threshold will catch more defaulters at the cost of more false positives — or raising it will improve precision while reducing recall. The correct threshold is the one that maximizes F1 or minimizes business cost.
+Decision: Threshold optimization selected. The model already ranks borrowers effectively. The bottleneck is the classification decision, not the learning. SMOTE is deferred to Stage 6 where it will be applied correctly inside cross-validation folds to prevent leakage.
+
+STAGE 5 — THRESHOLD OPTIMIZATION
+The optimal threshold for each model was identified using the Precision-Recall curve. For each threshold value, F1 was computed. The threshold maximizing F1 was selected.
+Result:
+ModelPrecisionRecallF1Optimal ThresholdLogistic Regression0.3680.4770.4160.736Random Forest0.3970.4440.4190.761XGBoost0.3610.4970.4180.746
+Precision improved from ~0.22 to ~0.36-0.40. F1 improved from ~0.34 to ~0.42. These gains came purely from changing the classification decision, with no changes to model architecture or training data.
+The optimal thresholds (~0.74-0.76) are notably high. This indicates the models are conservative — they only assign high probability scores to borrowers they are very confident about. This behavior is sensible given the 14:1 imbalance: the model learns that most borrowers do not default and requires strong evidence before predicting a default.
+Final model selection: XGBoost. Although Random Forest achieved the highest F1 and Precision, XGBoost achieved the highest Recall (0.4970). In loan default prediction, missing a defaulter — approving a loan to someone who will not repay — is materially more costly than incorrectly flagging a creditworthy borrower who can appeal or reapply. Maximizing recall is the correct business-aligned objective, making XGBoost the final selected model.

@@ -90,21 +90,21 @@ features = [
 # STEP 3: Train model
 # -----------------------------
 model = RandomForestRegressor(
-    n_estimators=50,
-    random_state=42,
-    n_jobs=-1
-)
+     n_estimators=50,
+     random_state=42,
+     n_jobs=-1
+ )
 
 model.fit(known[features], known['MonthlyIncome'])
 
-# -----------------------------
-# STEP 4: Predict missing income
-# -----------------------------
+# # -----------------------------
+# # STEP 4: Predict missing income
+# # -----------------------------
 predicted_income = model.predict(unknown[features])
 
-# -----------------------------
-# STEP 5: Fill missing values
-# -----------------------------
+# # -----------------------------
+# # STEP 5: Fill missing values
+# # -----------------------------
 df.loc[df['MonthlyIncome'].isna(), 'MonthlyIncome'] = predicted_income
 df['NumberOfDependents'] = df['NumberOfDependents'].fillna(df['NumberOfDependents'].median())
 
@@ -326,7 +326,51 @@ import seaborn as sns
 # =====================================================================
 # END OF EDA STAGE
 # =====================================================================
+# =====================================================================
+# STAGE 2.2: FEATURE ENGINEERING
+# =====================================================================
+print("\n--- Starting Feature Engineering ---")
 
+# 1. Total Late Events (Raw volume of delinquency)
+df['Total_Late_Events'] = (
+    df['NumberOfTime30-59DaysPastDueNotWorse'] + 
+    df['NumberOfTime60-89DaysPastDueNotWorse'] + 
+    df['NumberOfTimes90DaysLate']
+)
+
+# 2. Weighted Late Score (Severity of delinquency)
+df['Weighted_Late_Score'] = (
+    (df['NumberOfTime30-59DaysPastDueNotWorse'] * 1) + 
+    (df['NumberOfTime60-89DaysPastDueNotWorse'] * 2) + 
+    (df['NumberOfTimes90DaysLate'] * 3)
+)
+
+# 3. Credit Utilization Warning Flag (Binary)
+df['Credit_Utilization_Warning'] = (df['RevolvingUtilizationOfUnsecuredLines'] > 0.85).astype(int)
+
+# 4. Income Per Dependent
+# Reverse log1p safely, calculate, then re-apply log1p
+raw_income = np.expm1(df['MonthlyIncome'])
+df['Income_Per_Dependent'] = raw_income / (df['NumberOfDependents'] + 1)
+df['Income_Per_Dependent'] = np.log1p(df['Income_Per_Dependent'])
+
+# 5. NEW: Absolute Money Features (Financial Survival)
+# DebtRatio is a percentage. We multiply it by raw income to get the literal dollar amount of debt.
+df['Absolute_Monthly_Debt'] = df['DebtRatio'] * raw_income
+# Then we see how much literal cash they have left to survive the month.
+df['Remaining_Living_Money'] = raw_income - df['Absolute_Monthly_Debt']
+# ---> ADD THESE TWO LINES <---
+df['Is_Cash_Negative'] = (df['Remaining_Living_Money'] < 0).astype(int)
+df['Low_Buffer_Flag'] = (df['Remaining_Living_Money'] < 500).astype(int)
+
+# 5. Drop redundant raw columns to prevent XGBoost confusion
+df = df.drop(columns=[
+    'NumberOfTime30-59DaysPastDueNotWorse',
+    'NumberOfTime60-89DaysPastDueNotWorse',
+    'NumberOfTimes90DaysLate'
+])
+print(f"Dataset shape after feature engineering: {df.shape}")
+# =====================================================================
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -380,11 +424,201 @@ import seaborn as sns
 # plt.show()
 
 # Check if the default rate actually changes based on the missing income flag
-missing_income_rates = df.groupby('MonthlyIncome_was_missing')['SeriousDlqin2yrs'].agg(['mean', 'count'])
-missing_income_rates['mean'] = (missing_income_rates['mean'] * 100).round(2)
-missing_income_rates.columns = ['Default_Rate_Percentage', 'Total_Borrowers']
+# missing_income_rates = df.groupby('MonthlyIncome_was_missing')['SeriousDlqin2yrs'].agg(['mean', 'count'])
+# missing_income_rates['mean'] = (missing_income_rates['mean'] * 100).round(2)
+# missing_income_rates.columns = ['Default_Rate_Percentage', 'Total_Borrowers']
 
-print("--- Missing Income Validation ---")
-print(missing_income_rates)
+# print("--- Missing Income Validation ---")
+# print(missing_income_rates)
 
 
+import numpy as np
+import pandas as pd
+
+from sklearn.dummy import DummyClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+
+from sklearn.metrics import (
+    precision_score, recall_score, f1_score,
+    average_precision_score, roc_auc_score
+)
+
+# =========================================================
+# 1. EVALUATION FUNCTION (CORE)
+# =========================================================
+def evaluate_model(name, y_true, y_prob, threshold=0.5):
+    y_pred = (y_prob >= threshold).astype(int)
+
+    precision = precision_score(y_true, y_pred)
+    recall = recall_score(y_true, y_pred)
+    f1 = f1_score(y_true, y_pred)
+    pr_auc = average_precision_score(y_true, y_prob)
+    roc_auc = roc_auc_score(y_true, y_prob)
+
+    print(f"\n{name}")
+    print("-" * 40)
+    print(f"Precision : {precision:.4f}")
+    print(f"Recall    : {recall:.4f}")
+    print(f"F1 Score  : {f1:.4f}")
+    print(f"PR-AUC    : {pr_auc:.4f}")
+    print(f"ROC-AUC   : {roc_auc:.4f}")
+
+# =========================================================
+# 2. DUMMY MODEL
+# =========================================================
+# dummy = DummyClassifier(strategy='stratified', random_state=42)
+# dummy.fit(X_train, y_train)
+
+# dummy_prob = dummy.predict_proba(X_test)[:, 1]
+# evaluate_model("Dummy Classifier", y_test, dummy_prob)
+
+# =========================================================
+# 3. LOGISTIC REGRESSION
+# =========================================================
+# lr = LogisticRegression(class_weight='balanced', max_iter=2000)
+# lr.fit(X_train_scaled, y_train)
+
+# lr_prob = lr.predict_proba(X_test_scaled)[:, 1]
+# evaluate_model("Logistic Regression", y_test, lr_prob)
+
+# =========================================================
+# 4. RANDOM FOREST (BASELINE)
+# =========================================================
+# rf = RandomForestClassifier(
+#     n_estimators=100,
+#     max_depth=10,
+#     min_samples_leaf=20,
+#     class_weight='balanced',
+#     random_state=42,
+#     n_jobs=-1
+# )
+
+# rf.fit(X_train_scaled, y_train)
+
+# rf_prob = rf.predict_proba(X_test_scaled)[:, 1]
+# evaluate_model("Random Forest", y_test, rf_prob)
+
+from xgboost import XGBClassifier
+
+# =========================================================
+# 5. XGBOOST (SLIGHTLY OPTIMIZED)
+# =========================================================
+
+# Calculate imbalance ratio
+scale_pos_weight = (y_train == 0).sum() / (y_train == 1).sum()
+
+xgb = XGBClassifier(
+    n_estimators=300,
+    learning_rate=0.05,
+    max_depth=6,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    scale_pos_weight=scale_pos_weight,
+    eval_metric='logloss',
+    random_state=42,
+    n_jobs=-1
+)
+
+xgb.fit(X_train_scaled, y_train)
+
+xgb_prob = xgb.predict_proba(X_test_scaled)[:, 1]
+
+# evaluate_model("XGBoost", y_test, xgb_prob)
+
+
+def find_best_threshold(y_true, y_prob, model_name):
+    from sklearn.metrics import precision_recall_curve
+    import numpy as np
+
+    precision, recall, thresholds = precision_recall_curve(y_true, y_prob)
+
+    f1_scores = 2 * (precision * recall) / (precision + recall + 1e-10)
+
+    best_idx = np.argmax(f1_scores)
+    best_threshold = thresholds[best_idx]
+
+    print(f"\n{model_name} - Optimal Threshold")
+    print("-" * 40)
+    print("Best Threshold:", round(best_threshold, 4))
+    print("Best F1:", round(f1_scores[best_idx], 4))
+    print("Precision:", round(precision[best_idx], 4))
+    print("Recall:", round(recall[best_idx], 4))
+
+    return best_threshold
+
+# find_best_threshold(y_test, lr_prob, "Logistic Regression")
+# find_best_threshold(y_test, rf_prob, "Random Forest")
+find_best_threshold(y_test, xgb_prob, "XGBoost")
+
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.metrics import make_scorer, average_precision_score
+
+from sklearn.calibration import CalibratedClassifierCV
+
+# =====================================================================
+# STAGE 3.5: THE 60/40 TARGETED EXPERIMENT (THE "NUCLEAR" OPTION)
+# =====================================================================
+print("\n" + "="*50)
+print("TRAINING TARGETED XGBOOST (Optimizing for AUCPR + Constraints)...")
+print("="*50)
+
+# Define which features should always increase risk (1) or decrease risk (-1)
+# This prevents the model from "hallucinating" patterns in noise
+constraints = {
+    'RevolvingUtilizationOfUnsecuredLines': 1,
+    'Weighted_Late_Score': 1,
+    'Total_Late_Events': 1,
+    'DebtRatio': 1,
+    'Absolute_Monthly_Debt': 1,
+    'age': -1, # Older people are generally lower risk
+    'Remaining_Living_Money': -1 # More cash = lower risk
+}
+
+# Map constraints to the columns in X_train_scaled
+# (We fill 0 for columns that don't have a strict rule)
+monotonic_vec = [constraints.get(col, 0) for col in X_train_scaled.columns]
+
+targeted_xgb = XGBClassifier(
+    max_depth=4, # Shallower trees = less overfitting to noise
+    learning_rate=0.01,
+    n_estimators=600,
+    subsample=0.7,
+    colsample_bytree=0.7,
+    min_child_weight=25,
+    gamma=2,
+    scale_pos_weight=5, # Softer weighting to protect Precision
+    eval_metric='aucpr', # Optimizing the specific curve we care about
+    monotone_constraints=tuple(monotonic_vec), # Forcing the model to be logical
+    random_state=42,
+    n_jobs=-1
+)
+
+targeted_xgb.fit(X_train_scaled, y_train)
+targeted_prob = targeted_xgb.predict_proba(X_test_scaled)[:, 1]
+
+# =========================================================
+# STAGE 3.6: THE "60/40" SEARCH
+# =========================================================
+def find_60_40_target(y_true, y_prob):
+    from sklearn.metrics import precision_recall_curve
+    import numpy as np
+
+    precisions, recalls, thresholds = precision_recall_curve(y_true, y_prob)
+    
+    # We find the point closest to 60% Recall
+    target_recall = 0.60
+    idx = np.argmin(np.abs(recalls - target_recall))
+    
+    best_threshold = thresholds[min(idx, len(thresholds)-1)]
+
+    print(f"\n🎯 TARGETING 60% RECALL")
+    print("-" * 40)
+    print(f"Threshold used : {best_threshold:.4f}")
+    print(f"Final Precision: {precisions[idx]:.4f}")
+    print(f"Final Recall   : {recalls[idx]:.4f}")
+    
+    f1 = 2 * (precisions[idx] * recalls[idx]) / (precisions[idx] + recalls[idx])
+    print(f"Final F1 Score : {f1:.4f}")
+
+find_60_40_target(y_test, targeted_prob)
