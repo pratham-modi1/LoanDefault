@@ -1,66 +1,63 @@
-🛡️ LoanGuard AI — Smart Credit Risk Assessment
-LoanGuard AI is a high-performance, explainable machine learning dashboard designed to predict the probability of loan default. Unlike traditional "black-box" models, LoanGuard leverages SHAP (SHapley Additive exPlanations) to provide transparent, feature-level insights for every prediction.
+LOANGUARD AI -- SMART CREDIT RISK ASSESSMENT
 
-🚀 Live Demo
-Check out the live application here: loanguardai.streamlit.app
+Project Overview:
+LoanGuard AI is a real-time, explainable machine learning application designed to predict loan default probability with high precision. Built for financial analysts, the platform transforms complex "black-box" XGBoost predictions into clear, actionable insights using SHAP (SHapley Additive exPlanations).
 
-✨ Key Features
-Real-time Prediction: Instant default probability scoring using an optimized XGBoost pipeline.
+Live Application:
+loanguardai.streamlit.app
 
-Explainable AI (XAI): Interactive Waterfall and Bar plots reveal exactly why a borrower was flagged as high-risk.
+Key Features:
 
-Advanced Feature Engineering: Includes custom-built indicators like the Struggle Index, Weighted Late Scores, and Debt-to-Income Interactions.
+Predictive Intelligence: Leverages an optimized XGBoost model trained on 150,000+ borrower records.
 
-Sleek UI/UX: A custom-styled dark mode interface built with Streamlit, optimized for financial analysts.
+Explainable AI (XAI): Interactive Waterfall and Bar charts reveal the exact financial drivers behind every risk score.
 
-Technical Reporting: Integrated documentation covering Preprocessing, EDA, and Model Selection.
+Custom Feature Engineering: Implements 25 advanced features including the Struggle Index, Weighted Late Scores, and Debt-to-Income Interactions.
 
-🛠️ Tech Stack
-Core: Python 3.11+
+Modern Financial Dashboard: A sleek, dark-mode UI optimized for real-time analysis and decision-making.
 
-Machine Learning: XGBoost, Scikit-learn
+Audit-Ready Documentation: Integrated technical reports covering the entire data science lifecycle (Preprocessing, EDA, and Model Selection).
 
-Explainability: SHAP (SHapley Additive exPlanations)
+Tech Stack:
 
-Deployment & UI: Streamlit
+Languages: Python 3.11+
 
-Data Handling: Pandas, NumPy
+Frameworks: Streamlit (UI/Deployment), XGBoost (Modeling)
+
+Explainability: SHAP (Step-by-step impact analysis)
+
+Data Science: Pandas, NumPy, Scikit-learn, Joblib
 
 Visualization: Matplotlib, Seaborn
 
-📂 Project Structure
-Plaintext
-├── streamlit_app.py        # Main Streamlit application logic & UI
-├── 1_Project.py            # Model training & feature engineering pipeline
-├── best_xgb_model.joblib   # Pre-trained XGBoost model
-├── data_scaler.joblib      # Fitted RobustScaler for input normalization
-├── reports/                # Markdown files for the technical documentation tab
-├── utility/                # Data dictionaries and evaluation logs
-└── requirements.txt        # Production dependencies
-⚙️ Local Setup
-To run this project locally, follow these steps:
+Project Structure:
+-- streamlit_app.py        (Main Streamlit dashboard application)
+-- 1_Project.py            (Model training and feature engineering script)
+-- best_xgb_model.joblib   (Serialized XGBoost model)
+-- data_scaler.joblib      (Serialized RobustScaler for data normalization)
+-- reports/                (Technical markdown documentation)
+-- requirements.txt        (Production dependencies)
 
-Clone the repository:
+Model Methodology:
+The model is trained on the Kaggle "Give Me Some Credit" dataset.
 
-Bash
-git clone https://github.com/your-username/LoanDefault.git
+Objective: Maximize Recall to capture 75%+ of actual defaulters while maintaining a balanced Precision/F1 score.
+
+Handling Imbalance: Optimized using scale_pos_weight and threshold tuning (set at 0.1883) to address the 6.6% minority class distribution.
+
+Feature Engineering: Validated that engineered features like Youth_Utilization_Risk provide higher predictive value than raw data alone.
+
+Local Development:
+
+Clone the Repository:
+git clone [Your GitHub URL]
 cd LoanDefault
-Create a virtual environment:
 
-Bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-Install dependencies:
-
-Bash
+Install Dependencies:
 pip install -r requirements.txt
-Launch the App:
 
-Bash
+Run the App:
 streamlit run streamlit_app.py
-🧠 Model Methodology
-The underlying model was trained on the Kaggle "Give Me Some Credit" dataset (150,000+ records).
 
-Optimization: Hyperparameter tuning via GridSearchCV focused on maximizing Recall (catching 75% of actual defaulters).
-
-Handling Imbalance: Applied scale_pos_weight to manage the high class-imbalance ratio (6.6% default rate).
+License:
+This project is distributed under the MIT License.
