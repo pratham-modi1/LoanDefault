@@ -1,0 +1,16 @@
+# Python environment
+__pycache__/
+*.pyc
+.venv/
+env/
+
+# Large Datasets (Keep these local)
+cs-test.csv
+cs-training.csv
+
+# If sampleEntry is just for testing, ignore it too
+sampleEntry.csv
+
+# OS generated files
+.DS_Store
+Thumbs.db
