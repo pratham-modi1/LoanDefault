@@ -1,0 +1,46 @@
+CREDIT USAGE
+
+RevolvingUtilizationOfUnsecuredLines:
+This represents how much of the available credit a person is using. A higher value means the person is using a large portion of their credit limit, which can indicate financial stress or dependency on credit. Very high usage can imply higher risk of default.
+
+
+PAYMENT BEHAVIOR
+
+NumberOfTime30-59DaysPastDueNotWorse:
+This shows how many times the person was slightly late in payments (1–2 months). Frequent occurrences indicate early signs of poor repayment behavior.
+
+NumberOfTime60-89DaysPastDueNotWorse:
+This represents moderate delays in payment (2–3 months). This is more serious than 30–59 days and suggests worsening financial discipline.
+
+NumberOfTimes90DaysLate:
+This counts how many times the person was severely late (90+ days). This is a strong indicator of default risk and reflects serious repayment issues.
+
+
+FINANCIAL CAPACITY
+
+DebtRatio:
+This measures how much of a person’s income goes toward paying debts. A higher ratio means a larger portion of income is already committed, leaving less flexibility and increasing default risk.
+
+MonthlyIncome:
+This is the total monthly income of the person. Higher income generally suggests better repayment ability, but must be evaluated along with debt levels.
+
+
+PERSONAL PROFILE
+
+age:
+The age of the borrower. Different age groups may have different financial stability levels.
+
+NumberOfOpenCreditLinesAndLoans:
+This indicates how many active credit accounts the person has. Too many accounts can suggest over-borrowing, while too few may indicate limited credit history.
+
+NumberRealEstateLoansOrLines:
+This shows how many property-related loans the person has. It can indicate both asset ownership and financial burden depending on context.
+
+NumberOfDependents:
+This represents how many people depend on the borrower financially. More dependents can increase financial pressure and reduce repayment capacity.
+
+
+TARGET VARIABLE
+
+SeriousDlqin2yrs:
+This indicates whether the person has experienced serious delinquency (90+ days past due). A value of 1 means default, and 0 means no default

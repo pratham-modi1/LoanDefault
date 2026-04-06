@@ -694,3 +694,11 @@ plt.show()
 shap.dependence_plot("Weighted_Late_Score", shap_values.values, X_sample, show=False)
 plt.tight_layout()
 plt.show()
+
+shap.dependence_plot("Struggle_Index", shap_values.values, X_sample)
+plt.tight_layout()
+plt.show()
+
+shap.dependence_plot("Youth_Utilization_Risk", shap_values.values, X_sample)
+plt.tight_layout()
+plt.show()
