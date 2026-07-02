@@ -195,7 +195,7 @@ Threshold optimization uses the Precision-Recall curve to find the exact probabi
 
 **Decision:** Threshold Optimization was selected. The model already knows how to rank borrowers by risk. The problem is the decision boundary, not the learning. Changing the threshold is a zero-cost intervention that directly addresses the root cause.
 
-### Results After Threshold Optimization
+### Results After F1-Maximizing Threshold Optimization
 
 | Model | Precision | Recall | F1 Score | Threshold |
 | --- | --- | --- | --- | --- |
@@ -206,6 +206,8 @@ Threshold optimization uses the Precision-Recall curve to find the exact probabi
 **Key Discovery — The High Threshold:** The optimal threshold is approximately 0.74–0.76, far above the default 0.5. The model only assigns high confidence scores to genuinely risky borrowers. Most borderline predictions sit between 0.1 and 0.4 — the model is being cautious by default.
 
 **Improvement without any code changes:** Precision jumped from 22% to 36–39%. F1 Score improved from 0.34 to 0.42.
+
+> **Note:** This F1-maximizing threshold (≈0.75) is an intermediate checkpoint, not the final deployed threshold. It proves threshold tuning works. The final strategy — which produces a different, lower threshold — is decided in Stage 6.5 below, after feature engineering and hyperparameter tuning change the model's probability distribution.
 
 ---
 
@@ -330,7 +332,27 @@ The second model filters out both bad and good predictions, collapsing final rec
 
 ---
 
-## Final Model Performance
+## Stage 6.5: Final Threshold Strategy — From F1-Maximizing to Recall-Targeted
+
+### Why the Threshold Changes Again
+
+Stage 4 found an F1-maximizing threshold around 0.75, tuned on the pre-feature-engineering model. Two things changed since then that made that threshold obsolete:
+
+1. **The feature set changed** (Stage 5, Phase 1–2) — new engineered features shift the model's probability distribution, so an old threshold no longer sits at the same point on the new precision-recall curve.
+2. **The business decision changed** (Stage 6) — Option B was formally selected: prioritize Recall over balanced F1. An F1-maximizing threshold is, by definition, not a recall-maximizing threshold. Once Recall was chosen as the governing priority, the threshold had to be re-derived against that target instead of against F1.
+
+### The Recall-Targeted Threshold Method
+
+Rather than maximizing F1, the final code selects **the highest threshold that still guarantees at least 75% recall**:
+
+```python
+idx = np.where(recall >= 0.75)[0][-1]
+best_threshold = thresholds[idx]
+```
+
+This is a deliberate, different objective from Stage 4's F1 search — it directly encodes the Stage 6 business decision (catch at least 3 in 4 real defaulters) rather than chasing an abstract balance metric.
+
+### Final Model Performance
 
 | Metric | Score |
 | --- | --- |
@@ -341,4 +363,6 @@ The second model filters out both bad and good predictions, collapsing final rec
 | PR-AUC | 0.3755 |
 | ROC-AUC | 0.8542 |
 
-> The model successfully captures **75% of actual defaulters**. This is the maximum performance achievable with this dataset.
+The much lower threshold (0.1883 vs. the earlier 0.7464) is expected, not a bug: guaranteeing 75% recall on a 14:1 imbalanced problem requires flagging borrowers at a much lower confidence level than an F1-balanced strategy would. This is the threshold that ships in `best_xgb_model.joblib` and is what the Streamlit app (`app.py`) uses at inference time.
+
+> The model successfully captures **75% of actual defaulters**. This is the maximum performance achievable with this dataset, at the recall target the business chose.
