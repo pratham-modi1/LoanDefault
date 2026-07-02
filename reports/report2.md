@@ -412,4 +412,3 @@ This EDA stage formally established what the model *should* learn. When SHAP ana
 | MonthlyIncome in SHAP bottom half | Confirmed — if income ranks high, model has overfit to noise |
 | NumberOfDependents near bottom | Confirmed — EDA showed no meaningful relationship with default |
 
-> **EDA is complete. The dataset's predictive structure is understood, the signal hierarchy is established, and the ground truth for model validation has been documented. The pipeline proceeds to Stage 2.5: Feature Engineering, Data Splitting, and Scaling.**
